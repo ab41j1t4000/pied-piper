@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info:
+  title: Pied Piper Transcription API
+  version: 1.0.0
+  description: Synchronous audio-to-chromatic-harmonica-tab contract for the MVP.
+servers:
+  - url: /api
+paths:
+  /transcriptions:
+    post:
+      operationId: createTranscription
+      summary: Convert one audio submission into a chromatic harmonica tab
+      description: >-
+        Accepts one audio file of at most 90 seconds and 50 MiB. Processing is
+        synchronous. The service does not retain the submitted audio after the
+        request finishes.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              additionalProperties: false
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: >-
+                    One supported audio file: MP3, WAV, M4A/AAC, OGG, FLAC, or
+                    browser-recorded WebM/Opus, subject to decoder compatibility.
+      responses:
+        '200':
+          description: A complete or partial best-effort lead-melody transcription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResult'
+        '400':
+          description: Missing audio part or malformed multipart request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '413':
+          description: Uploaded file exceeds the 50 MiB byte limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '415':
+          description: Media type or container is not in the accepted format set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Invalid, silent, over-duration, or insufficiently reliable audio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: The single MVP analysis slot is busy; the client may retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '504':
+          description: Analysis exceeded its 120-second deadline.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Unexpected processing failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+components:
+  schemas:
+    TranscriptionResult:
+      type: object
+      required: [durationSeconds, resultStatus, tuningProfile, notationLegend, notes, warnings]
+      additionalProperties: false
+      properties:
+        durationSeconds:
+          type: number
+          minimum: 0
+          maximum: 90
+        resultStatus:
+          type: string
+          enum: [complete, partial]
+        tuningProfile:
+          type: string
+          const: C_12_HOLE_SOLO
+        notationLegend:
+          type: string
+          const: "B=blow, D=draw, + = slide in; no + = slide out"
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptionNote'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+    TranscriptionNote:
+      type: object
+      required: [sequence, startSeconds, durationSeconds, midiPitch, noteName, confidenceBand, playability, tab]
+      additionalProperties: false
+      properties:
+        sequence:
+          type: integer
+          minimum: 0
+        startSeconds:
+          type: number
+          minimum: 0
+        durationSeconds:
+          type: number
+          exclusiveMinimum: 0
+        midiPitch:
+          type: integer
+        noteName:
+          type: string
+          description: Scientific pitch spelling, for example C4 or F#5.
+        confidenceBand:
+          type: string
+          enum: [high, review]
+          description: Qualitative band; not a calibrated probability.
+        playability:
+          type: string
+          enum: [playable, out_of_range]
+        tab:
+          oneOf:
+            - $ref: '#/components/schemas/HarmonicaPosition'
+            - type: 'null'
+    HarmonicaPosition:
+      type: object
+      required: [hole, breath, slideIn, label]
+      additionalProperties: false
+      properties:
+        hole:
+          type: integer
+          minimum: 1
+          maximum: 12
+        breath:
+          type: string
+          enum: [blow, draw]
+        slideIn:
+          type: boolean
+        label:
+          type: string
+          example: 4B+
+    Warning:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [LOW_CONFIDENCE_SECTION, NOTES_OUT_OF_RANGE]
+        message:
+          type: string
+    ApiError:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+            - INVALID_MULTIPART
+            - FILE_TOO_LARGE
+            - UNSUPPORTED_MEDIA
+            - DURATION_LIMIT_EXCEEDED
+            - INVALID_AUDIO
+            - NO_RELIABLE_MELODY
+            - PROCESSING_BUSY
+            - PROCESSING_TIMEOUT
+            - PROCESSING_FAILED
+        message:
+          type: string
+        retryable:
+          type: boolean

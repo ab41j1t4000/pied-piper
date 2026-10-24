@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pied-piper-audio"
+version = "0.1.0"
+description = "Backend audio analysis for chromatic harmonica tab transcription"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "av==18.1.0",
+  "essentia==2.1b6.dev1389",
+  "numpy>=1.24,<3",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
